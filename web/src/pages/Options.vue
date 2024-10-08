@@ -10,6 +10,12 @@ export default defineComponent({
         target: "overwrite_photos",
         value: false,
       },
+      {
+        title: "Require confirmation",
+        description: "If enabled, you will be asked to confirm each contact before syncing.",
+        target: "require_confirmation",
+        value: true,
+      }
     ],
   }),
   mounted() {},

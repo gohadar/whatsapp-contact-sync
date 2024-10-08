@@ -32,7 +32,7 @@ router.beforeEach(
   async (to: RouteLocationNormalized, from: RouteLocationNormalized) => {
     // Makes sure websocket is initialized.
     //  This is done on every request to make sure the server didn't discconect in the meantime.
-    initWs();
+    initWs().then();
 
     // Don't make any checks for serving the index page.
     // This is done so the user can access it even if the backend is down.
@@ -43,23 +43,24 @@ router.beforeEach(
     const status: SessionStatus = await response.json();
 
     if (
-      ["/whatsapp", "/sync", "/gauth", "/options"].includes(to.path) &&
+      [ "/whatsapp", "/sync", "/gauth", "/options" ].includes(to.path) &&
       !status.purchased
-    )
-      router.push("/contribute");
-    else if (to.path === "/contribute" && status.purchased)
-      router.push("/whatsapp");
-    else if (
-      ["/sync", "/gauth", "/options"].includes(to.path) &&
+    ) {
+      router.push("/contribute").then();
+    } else if (to.path === "/contribute" && status.purchased) {
+      router.push("/whatsapp").then();
+    } else if (
+      [ "/sync", "/gauth", "/options" ].includes(to.path) &&
       !status.whatsappConnected
-    )
-      router.push("/");
-    else if (to.path === "/sync" && !status.googleConnected)
-      router.push("/gauth");
-    else if (to.path === "/whatsapp" && status.whatsappConnected)
-      router.push("/gauth");
-    else if (to.path === "/gauth" && status.googleConnected)
-      router.push("/options");
+    ) {
+      router.push("/").then();
+    } else if (to.path === "/sync" && !status.googleConnected) {
+      router.push("/gauth").then();
+    } else if (to.path === "/whatsapp" && status.whatsappConnected) {
+      router.push("/gauth").then();
+    } else if (to.path === "/gauth" && status.googleConnected) {
+      router.push("/options").then();
+    }
   }
 );
 

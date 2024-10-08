@@ -37,6 +37,8 @@ export async function initSync(id: string, syncOptions: SyncOptions) {
   }
 
   let syncCount: number = 0;
+  let skippedCount: number = 0;
+  let isSynced: boolean | null = null;
   let photo: string | null = null;
 
   // For some reason all of the contacts that don't have a photo are at the beginning of the array.
@@ -75,9 +77,27 @@ export async function initSync(id: string, syncOptions: SyncOptions) {
       photo = await downloadFile(whatsappClient, whatsappContactId);
       if (photo === null) break;
 
-      await limiter.removeTokens(1);
-      await updateContactPhoto(gAuth, googleContact.id, photo);
-      syncCount++;
+      /**
+       * The current implementation for the confirmation is slow because it waits for the user to
+       * approve or skip before continuing to the next contact. This causes more delays because it
+       * takes a bit of time to get the next contact's photo, which results in a bit of "downtime".
+       *
+       * A better way to handle this is to pre-fetch the next contact's photo while waiting for the
+       * user's response. This way, once the user approves the current contact the sync can continue
+       * without any delays. Another way is to store the URLs of the photos in the `googleContacts`
+       * array and use them when needed. This way, we can avoid fetching the same photo multiple
+       * times.
+       *
+       * TODO: Implement pre-fetching of the next contact's photo.
+       */
+      isSynced = await updateContactPhoto(gAuth, googleContact.id, photo, ws);
+
+      if (isSynced) {
+        await limiter.removeTokens(1);
+        syncCount++;
+      } else {
+        skippedCount++;
+      }
 
       break;
     }
@@ -85,9 +105,12 @@ export async function initSync(id: string, syncOptions: SyncOptions) {
     sendEvent(ws, EventType.SyncProgress, {
       progress: (index / googleContacts.length) * 100,
       syncCount: syncCount,
+      skippedCount,
       totalContacts: googleContacts.length,
       image: photo,
+      isSynced
     });
+
     photo = null;
   }
 

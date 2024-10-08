@@ -1,14 +1,16 @@
 <script lang="ts">
 import { defineComponent } from "vue";
 import { event } from "vue-gtag";
-import { EventType, SyncProgress } from "../../../interfaces/api";
-import { addHandler } from "../services/ws";
+import { ContactCompare, EventType, SyncProgress } from "../../../interfaces/api";
+import { addHandler, WS } from "../services/ws";
 
 export default defineComponent({
   data: () => ({
     imageDisplayedCount: 9,
     syncProgress: 0,
     syncCount: 0,
+    skippedCount: 0,
+    contact: undefined as ContactCompare | undefined | null,
     images: [] as string[],
     totalContactsPushed: false,
     errorMessage: undefined as string | undefined,
@@ -16,6 +18,7 @@ export default defineComponent({
   }),
 
   mounted() {
+    addHandler(EventType.ContactCompare, this.onContactCompare);
     addHandler(EventType.SyncProgress, this.onSyncProgress);
     this.initSync();
     setInterval(this.checkServerDisconnected, 5 * 1000);
@@ -36,6 +39,29 @@ export default defineComponent({
           : undefined;
     },
 
+    onContactCompare(contact: ContactCompare) {
+      console.log("Contact compare", contact);
+      this.contact = contact;
+    },
+
+    onContactApply() {
+      WS.send(JSON.stringify({
+        type: EventType.ContactPhotoApply,
+        payload: this.contact,
+      }))
+
+      this.contact = null;
+    },
+
+    onContactSkip() {
+      WS.send(JSON.stringify({
+        type: EventType.ContactPhotoSkip,
+        payload: this.contact,
+      }))
+
+      this.contact = null;
+    },
+
     onSyncProgress(progress: SyncProgress): void {
       if (!this.totalContactsPushed) {
         event("num_contacts_synced", {
@@ -48,8 +74,14 @@ export default defineComponent({
       this.lastSyncReceived = Date.now();
       this.syncProgress = progress.progress;
       this.syncCount = progress.syncCount;
+      this.skippedCount = progress.skippedCount;
       this.errorMessage = progress.error;
-      if (progress.image) {
+
+      if (this.syncProgress === 100) {
+        this.contact = undefined;
+      }
+
+      if (progress.image && progress.isSynced) {
         this.images.push(progress.image);
         if (this.images.length > this.imageDisplayedCount) this.images.shift();
       }
@@ -88,6 +120,49 @@ export default defineComponent({
             />
           </svg>
           <span>{{ errorMessage }}</span>
+        </div>
+
+        <div :hidden="contact === undefined">
+          <div class="card bg-base-100 shadow-xl mb-8">
+            <div class="mb-4">
+              <div v-if="contact?.name == null" class="skeleton w-full h-8 rounded-full"></div>
+              <h1 v-else class="text-3xl font-bold">{{ contact?.name }}</h1>
+            </div>
+            <div class="flex flex-row gap-4 h-44">
+              <figure class="flex-1">
+                <div v-if="contact?.whatsapp == null" class="skeleton size-full rounded-2xl"></div>
+                <img
+                    v-else
+                    width="100%"
+                    height="100%"
+                    :src="'data:image/jpeg;base64, ' + contact?.whatsapp"
+                    alt="Google Contact"
+                    class="rounded-2xl"
+                />
+              </figure>
+              ->
+              <figure class="flex-1">
+                <div v-if="contact?.google == null" class="skeleton size-full rounded-2xl"></div>
+                <img
+                    v-else
+                    width="100%"
+                    height="100%"
+                    :src="'data:image/jpeg;base64, ' + contact?.google"
+                    alt="WhatsApp Contact"
+                    class="rounded-2xl"
+                />
+              </figure>
+            </div>
+            <div class="card-body">
+              <h2 class="card-title">Compare Contact Photos</h2>
+              <p>Please compare the photos of the contact and decide if you want to update it.</p>
+            </div>
+
+            <div class="card-actions justify-end">
+              <button @click="onContactSkip" class="btn btn-error">Skip</button>
+              <button @click="onContactApply" class="btn btn-primary">Apply</button>
+            </div>
+          </div>
         </div>
 
         <div>
